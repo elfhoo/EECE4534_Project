@@ -96,5 +96,10 @@ void audioTx_isr(void *pThis);
  */
 int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk);
 
+TODO: define the max xadc input value
+xadc_max = 0;
+TODO: define the index couter
+static int horizontalCounter = 0;
+
 
 #endif
