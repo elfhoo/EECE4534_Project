@@ -116,7 +116,7 @@ void audioTx_isr(void *pThisArg)
      *  - return */
 
     /* receive pointer to chunk structure from Tx_queue,
-     	Note: when ISR running, audioTx_put should send the chunck to Tx_queue */
+     	Note: when ISR running, draw_wave_put should send the chunck to Tx_queue */
 
     /* how many samples does the chunk contain ? */
 
@@ -141,7 +141,7 @@ void audioTx_isr(void *pThisArg)
  * @return Zero on success.
  * Negative value on failure.
  */
-int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk)
+int draw_wave_put(audioTx_t *pThis, chunk_d_t *pChunk, image_buf *pImg)
 {
     
     if ( NULL == pThis || NULL == pChunk ) {
@@ -175,6 +175,55 @@ int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk)
 
 	}
 
+
+	/*********************************************************/
+	/************draw hdmi view*******************************/
+
+
+
+
+
+	//TODO: define the max xadc input value
+	unsigned int xadc_max = 0xffff;
+	//TODO: define the index couter
+
+
+	    /* how many samples does the chunk contain ? */
+
+    	//int sample_data_size = pChunk->bytesUsed;
+    	//int sample_size = sample_data_size/4;
+
+
+
+		int i;
+		int j;
+
+		//try to write to the matrix
+		while (counter < sample_size && pImg -> horizontalCounter < 1920)
+    	{
+		u32 dataSample = pChunk->u32_buff[counter];
+		int index_vertical;
+		index_vertical = 1080 * (dataSample/xadc_max);
+			for (i = 0; i<1080; i++)
+			{
+			//write to the index if it's the point to write to
+				if (i == index_vertical)
+				{
+					pImg -> image[counter][i] = 0xffff;
+				}
+			//otherwise write blank image
+				else
+					pImg -> image[counter][i] = 0x0000;
+			}
+
+			pImg -> horizontalCounter ++;
+			if (pImg -> horizontalCounter == 1980)
+			{
+				pImg -> horizontalCounter = 0;
+				//image is full, transfer to the image buffer
+				/*TODO: write to the HDMI buffer*/
+			}
+		}
 
 
 
