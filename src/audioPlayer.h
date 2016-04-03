@@ -22,6 +22,7 @@
 #include "audioRx.h"
 #include "audioTx.h"
 #include "adau1761.h"
+#include "image_buf.h"
 
 /** audioPlayer object
  */
@@ -33,6 +34,9 @@ typedef struct {
   unsigned int 	frequency;	/* Frequency of the audio player */
   chunk_d_t            *chunk;  /* Chunk for copy */
   tAdau1761 codec;  /* audio codec */
+
+  image_buf			*img; /*image to write*/
+
 } audioPlayer_t;
 
 /** initialize audio player 

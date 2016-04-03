@@ -105,54 +105,29 @@ void audioTx_isr(void *pThisArg)
 {
     // create local casted pThis to avoid casting on every single access
 	audioTx_t  *pThis = (audioTx_t*) pThisArg;
-	chunk_d_t *pChunk;
-
 
     /*TODO: place implementation here. See hints */
 
-	/* check int type and clear interrupt */
 
-	if( (*(volatile u32 *) (FIFO_BASE_ADDR + FIFO_INT_STATUS) & 0x00200000) == 0x00200000)
-	{
-		*(volatile u32 *) (FIFO_BASE_ADDR + FIFO_INT_STATUS) = 0xffffffff;
+    /* check int type and clear interrupt */
 
-		if (xQueueIsQueueEmptyFromISR(pThis->queue))
-		{
-			printf("queue empty\n");
-			pThis->running = 0;
-			return 1;
-		}
+    /* if queue is EMPTY
+     *  - set signal that ISR is not running
+     *  - return */
 
-		else
-		{
-			xQueueReceiveFromISR(pThis->queue , &pChunk ,NULL );
-			int sample_data_size = pChunk->bytesUsed;
-			int sample_size = sample_data_size/4;
+    /* receive pointer to chunk structure from Tx_queue,
+     	Note: when ISR running, draw_wave_put should send the chunck to Tx_queue */
 
-			int counter = 0;
+    /* how many samples does the chunk contain ? */
 
-	   /* check if sufficient space in device FIFO*/
+    /* check if sufficient space in device FIFO*/
+
+	/* copy samples in chuck into FIFO */
+
+    /* chunk has been copied into the FIFO, release chunk now. Return chunk to buffer pool. */
 
 
-		/* copy samples in chuck into FIFO */
-			while (counter < sample_size)
-			{
-				u32 dataSample = pChunk->u32_buff[counter] << 16;
-				*(u32*)(FIFO_BASE_ADDR + FIFO_TX_DATA) = dataSample;
-				*(u32*)(FIFO_BASE_ADDR + FIFO_TX_LENGTH) = 1;
-				counter++;
-
-				//write length
-
-				//printf("%d\n", dataSample);
-
-			}
-			bufferPool_d_release_from_ISR(pThis->pBuffP, pChunk);
-	/* chunk has been copied into the FIFO, release chunk now. Return chunk to buffer pool. */
-		}
-	}
-
-
+    return;
 }
 
 
@@ -166,7 +141,7 @@ void audioTx_isr(void *pThisArg)
  * @return Zero on success.
  * Negative value on failure.
  */
-int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk)
+int draw_wave_put(audioTx_t *pThis, chunk_d_t *pChunk, image_buf *pImg)
 {
     
     if ( NULL == pThis || NULL == pChunk ) {
@@ -176,99 +151,89 @@ int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk)
     
 
 
-    if (pThis->running == 0)
-    {
     /* how many samples does the chunk contain ? */
+	/* chunk max size is 512 bytes, but determined by bytes used*/
+	int sample_data_size = pChunk->bytesUsed;
+	int sample_size = sample_data_size/4;
 
-    	int sample_data_size = pChunk->bytesUsed;
-    	int sample_size = sample_data_size/4;
-
-    	int counter = 0;
+	int counter = 0;
 
 	   /* check if sufficient space in device FIFO*/
-    	while (*(u32*)(FIFO_BASE_ADDR + FIFO_TX_VAC) < sample_size )
-    	{
-    		vTaskDelay(1);
-    	}
+	while (*(u32*)(FIFO_BASE_ADDR + FIFO_TX_VAC) < sample_size )
+	{
+		vTaskDelay(1);
+	}
 
 		/* copy samples in chuck into FIFO */
-    	while (counter < sample_size)
-    	{
-    		u32 dataSample = pChunk->u32_buff[counter] << 16;
-    		*(u32*)(FIFO_BASE_ADDR + FIFO_TX_DATA) = dataSample;
-    		counter++;
-    		//write length
-    		*(u32*)(FIFO_BASE_ADDR + FIFO_TX_LENGTH) = 1;
+	while (counter < sample_size)
+	{
+		u32 dataSample = pChunk->u32_buff[counter] << 16;
+		*(u32*)(FIFO_BASE_ADDR + FIFO_TX_DATA) = dataSample;
+		counter++;
+		//write length
+		*(u32*)(FIFO_BASE_ADDR + FIFO_TX_LENGTH) = 1;
 
-    	}
-    	pThis->running = 1;
-    	bufferPool_d_release(pThis->pBuffP, pChunk);
-    /* chunk has been copied into the FIFO, release chunk now. Return chunk to buffer pool. */
+	}
 
 
-    }
-    else
-    {
-    	xQueueSend(pThis->queue , &pChunk ,NULL);
-    }
-	
 	/*********************************************************/
 	/************draw hdmi view*******************************/
-	
-	//image array
-	int image[1920][1080];
-	
-	
-	    if ( NULL == pThis || NULL == pChunk ) 
-		{
-			printf("[TX]: Failed to put\r\n");
-			return -1;
-		}
-	
+
+
+
+
+
+	//TODO: define the max xadc input value
+	unsigned int xadc_max = 0xffff;
+	//TODO: define the index couter
+
+
 	    /* how many samples does the chunk contain ? */
 
-    	int sample_data_size = pChunk->bytesUsed;
-    	int sample_size = sample_data_size/4;
+    	//int sample_data_size = pChunk->bytesUsed;
+    	//int sample_size = sample_data_size/4;
 
-		int pixel_index = 0;
-		int counter;
-    	int counter_H = pixel_index%1080;
-		
+
+
 		int i;
 		int j;
-		
+
 		//try to write to the matrix
-		while (counter < sample_size && counter < 1920)
+		while (counter < sample_size && pImg -> horizontalCounter < 1920)
     	{
 		u32 dataSample = pChunk->u32_buff[counter];
 		int index_vertical;
 		index_vertical = 1080 * (dataSample/xadc_max);
 			for (i = 0; i<1080; i++)
-			{	
+			{
 			//write to the index if it's the point to write to
 				if (i == index_vertical)
 				{
-					image[counter][i] = 0xfff;
+					pImg -> image[counter][i] = 0xffff;
 				}
 			//otherwise write blank image
 				else
-					image[counter][i] = 0x0000;
+					pImg -> image[counter][i] = 0x0000;
 			}
-			
-			horizontalCounter++;
-			if (horizontalCounter == 1980)
+
+			pImg -> horizontalCounter ++;
+			if (pImg -> horizontalCounter == 1980)
 			{
-				horizontalCounter = 0;
+				pImg -> horizontalCounter = 0;
 				//image is full, transfer to the image buffer
+				/*TODO: write to the HDMI buffer*/
 			}
 		}
-		
-		
-		
-		
-		
-    
-	
-	
-	
+
+
+
+
+
+
+    /* chunk has been copied into the FIFO, release chunk now. Return chunk to buffer pool. */
+
+	bufferPool_d_release(pThis->pBuffP, pChunk);
+
+
     return 0;
+}

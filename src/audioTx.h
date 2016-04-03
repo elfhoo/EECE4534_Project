@@ -19,6 +19,7 @@
 
 #include "bufferPool_d.h"
 #include "adau1761.h"
+#include "image_buf.h"
 /***************************************************
             DEFINES
 ***************************************************/   
@@ -94,12 +95,7 @@ void audioTx_isr(void *pThis);
  * @return Zero on success.
  * Negative value on failure.
  */
-int audioTx_put(audioTx_t *pThis, chunk_d_t *pChunk);
-
-TODO: define the max xadc input value
-xadc_max = 0;
-TODO: define the index couter
-static int horizontalCounter = 0;
+int draw_wave_put(audioTx_t *pThis, chunk_d_t *pChunk, image_buf *pImg);
 
 
 #endif

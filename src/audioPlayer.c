@@ -144,7 +144,7 @@ void audioPlayer_task (void *pArg) {
          * to the audio TX */
         if ( 1 == status ) {
           /** play audio chunk through speakers */
-          audioTx_put(&pThis->tx, pThis->chunk);
+          draw_wave_put(&pThis->tx, pThis->chunk, pThis->img);
         }
   }
 }
