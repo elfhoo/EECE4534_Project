@@ -1,4 +1,60 @@
 //----------------------------------------------------------------
+
+//----------------------------------------------------------------
+//Part for xadc
+//----------------------------------------------------------------
+#include <stdio.h>
+#include "platform.h"
+#include "xsysmon.h"
+
+#define SYSMON_DEVICE_ID XPAR_SYSMON_0_DEVICE_ID //ID of xadc_wiz_0
+#define XSysMon_RawToExtVoltage(AdcData) ((((float)(AdcData))*(1.0f))/65536.0f) //(ADC 16bit result)/16/4096 = (ADC 16bit result)/65536
+
+// voltage value = (ADC 16bit result)/65536 * 1Volt
+
+static XSysMon SysMonInst; //a sysmon instance
+static int SysMonFractionToInt(float FloatNum);
+
+//int main()
+
+//{
+//
+//
+//
+//while(1)
+//
+//{ //wait until EOS activated
+//
+//
+//
+//usleep(500000); //wait 500ms
+//
+//}
+//
+//return 0;
+//
+//}
+
+//----------------------------------------------------------------------------------------------
+
+int SysMonFractionToInt(float FloatNum)
+
+{
+
+float Temp;
+Temp = FloatNum;
+
+if (FloatNum < 0) {
+	Temp = -(FloatNum);
+}
+
+return( ((int)((Temp -(float)((int)Temp)) * (1000.0f))));
+
+}
+
+
+
+//----------------------------------------------------------------
 //      _____
 //     /     \
 //    /____   \____
@@ -147,6 +203,40 @@ Xuint8 carrier_hdmi_out_config[CARRIER_HDMI_OUT_CONFIG_LEN][3] =
 };
 
 
+int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 iterations )
+{
+	//if (wave <= pDemo->hdmio_height)
+
+   Xuint32 frame, row, col;
+   Xuint32 cbar, pixel;
+   volatile Xuint32 *pStorageMem = (Xuint32 *)pDemo->uBaseAddr_MEM_HdmiDisplay;
+   xil_printf( "fame number is %d ...\n", pDemo->uNumFrames_HdmiDisplay );
+   for ( frame = 0; frame < pDemo->uNumFrames_HdmiDisplay; frame++ )
+   {
+      for ( row = 0; row < pDemo->hdmio_height; row++ )
+      {
+         for ( col = 0; col < pDemo->hdmio_width; col++ )
+         {
+        	 if (row == wave[col] + iterations)
+        		 pixel = 0x00FFFFFF; // White
+        	 else
+        		 pixel = 0x00000000; // Black
+
+
+            *pStorageMem++ = pixel;
+         }
+      }
+   }
+
+   // Wait for DMA to synchronize.
+   Xil_DCacheFlush();
+
+
+   return 0;
+}
+
+Xuint32 wave[1920];
+
 //int zed_hdmi_display_init( zed_hdmi_display_t *pDemo )
 void zed_hdmi_display_init( void *pArg )
 {
@@ -209,21 +299,109 @@ void zed_hdmi_display_init( void *pArg )
    vgen_init( &(pDemo->vtc_hdmio_generator), pDemo->uDeviceId_VTC_HdmioGenerator );
    vgen_config( &(pDemo->vtc_hdmio_generator), pDemo->hdmio_resolution, 1 );
 
+
+	  int counter;
+
+	  u8 SeqMode;
+	  u32 TempRawData,VccIntRawData,ExtVolRawData,i;
+
+	  float TempData,VccIntData,ExtVolData;
+
+	  int xStatus;
+
+	  XSysMon_Config *SysMonConfigPtr;
+
+	  XSysMon *SysMonInstPtr = &SysMonInst;
+
+	  init_platform();
+
+	  //xadc
+
+
+	  SysMonConfigPtr = XSysMon_LookupConfig(SYSMON_DEVICE_ID);
+
+	  if(SysMonConfigPtr == NULL) printf("LookupConfig FAILURE\n\r");
+
+	  xStatus = XSysMon_CfgInitialize(SysMonInstPtr, SysMonConfigPtr,SysMonConfigPtr->BaseAddress);
+
+	  if(XST_SUCCESS != xStatus) printf("CfgInitialize FAILED\r\n");
+
+	  //----------------------------------------------------------------------- SysMon Initialize
+
+	  Xuint32 value;
   while (1)
   {
-	  //vTaskDelay(100);
-   iterations++;
+	  for (counter = 0; counter < 1980; counter++){
+	  	  while ((XSysMon_GetStatus(SysMonInstPtr) & XSM_SR_EOS_MASK) != XSM_SR_EOS_MASK);
+
+
+	  	  TempRawData = XSysMon_GetAdcData(SysMonInstPtr, XSM_CH_TEMP);//Read the on-chip Temperature Data
+
+	  	  TempData = XSysMon_RawToTemperature(TempRawData);
+//
+//	  	  printf("\r\nThe Current Temperature is %0d.%03d Centigrades.\r\n",
+//
+//	  	  (int)(TempData), SysMonFractionToInt(TempData));
+
+	  	  value = TempRawData - 41000;
+	  	  value = TempData*10;
+	  	  wave[counter] = value;
+
+
+	  //	  VccIntRawData = XSysMon_GetAdcData(SysMonInstPtr, XSM_CH_VCCINT); //Read the on-chip Vccint Data
+	  //
+	  //	  VccIntData = XSysMon_RawToVoltage(VccIntRawData);
+	  //
+	  //	  printf("The Current VCCINT is %0d.%03d Volts. \r\n",
+	  //
+	  //	  (int)(VccIntData), SysMonFractionToInt(VccIntData));
+	  //
+	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_VPVN); //Read the external Vpn Data
+	  //
+	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
+
+
+
+	  //	  printf("The Current VpVn is %0d.%03d Volts. \r\n",
+	  //
+	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
+	  //
+	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_AUX_MIN); //Read the external Vaux0 Data
+	  //
+	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
+	  //
+	  //	  printf("The Current Vaux0 is %0d.%03d Volts. \r\n",
+	  //
+	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
+	  //
+	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_AUX_MIN+8);//Read the external Vaux8 Data
+	  //
+	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
+	  //
+	  //	  printf("The Current Vaux8 is %0d.%03d Volts. \r\n",
+	  //
+	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
+
+
+	  }
+
 
    // Display Color Bars
-   //xil_printf( "Generate Color Bars\n\r" );
-   //vfb_tx_stop( &(pDemo->vdma_hdmi) );
 
-
-   zed_hdmi_display_wave( pDemo, wave, iterations );
-   //zed_hdmi_display_cbars( pDemo, (iterations-1) );
+   zed_hdmi_display_wave( pDemo, wave, 200 );
    vfb_tx_start( &(pDemo->vdma_hdmi) );
 
+   xil_printf( "HDMI Output Re-Initialization ...\n\r" );
+   {
+      Xuint8 num_bytes;
+      int i;
 
+      for ( i = 0; i < CARRIER_HDMI_OUT_CONFIG_LEN; i++ )
+      {
+         //xil_printf( "[ZedBoard HDMI] IIC Write - Device = 0x%02X, Address = 0x%02X, Data = 0x%02X\n\r", carrier_hdmi_out_config[i][0]<<1, carrier_hdmi_out_config[i][1], carrier_hdmi_out_config[i][2] );
+         num_bytes = pDemo->hdmi_out_iic.fpIicWrite( &(pDemo->hdmi_out_iic), carrier_hdmi_out_config[i][0], carrier_hdmi_out_config[i][1], &(carrier_hdmi_out_config[i][2]), 1 );
+      }
+   }
 
 #if 0 // Activate for debug
    sleep(1);
@@ -235,7 +413,9 @@ void zed_hdmi_display_init( void *pArg )
    }
 #endif
 
-
+   xil_printf("\n\r");
+   xil_printf( "Done\n\r" );
+   xil_printf("\n\r");
   }
 
    //return 0;
@@ -267,7 +447,6 @@ int zed_hdmi_display_cbars( zed_hdmi_display_t *pDemo, Xuint32 offset )
    Xuint32 frame, row, col;
    Xuint32 cbar, pixel;
    volatile Xuint32 *pStorageMem = (Xuint32 *)pDemo->uBaseAddr_MEM_HdmiDisplay;
-   xil_printf( "fame number is %d ...\n", pDemo->uNumFrames_HdmiDisplay );
    for ( frame = 0; frame < pDemo->uNumFrames_HdmiDisplay; frame++ )
    {
       for ( row = 0; row < pDemo->hdmio_height; row++ )
@@ -294,39 +473,6 @@ int zed_hdmi_display_cbars( zed_hdmi_display_t *pDemo, Xuint32 offset )
 
    // Wait for DMA to synchronize.
    Xil_DCacheFlush();
-
-   return 0;
-}
-
-
-int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 iterations )
-{
-	//if (wave <= pDemo->hdmio_height)
-
-   Xuint32 frame, row, col;
-   Xuint32 cbar, pixel;
-   volatile Xuint32 *pStorageMem = (Xuint32 *)pDemo->uBaseAddr_MEM_HdmiDisplay;
-   xil_printf( "fame number is %d ...\n", pDemo->uNumFrames_HdmiDisplay );
-   for ( frame = 0; frame < pDemo->uNumFrames_HdmiDisplay; frame++ )
-   {
-      for ( row = 0; row < pDemo->hdmio_height; row++ )
-      {
-         for ( col = 0; col < pDemo->hdmio_width; col++ )
-         {
-        	 if (row == wave[col] + iterations)
-        		 pixel = 0x00FFFFFF; // White
-        	 else
-        		 pixel = 0x00000000; // Black
-
-
-            *pStorageMem++ = pixel;
-         }
-      }
-   }
-
-   // Wait for DMA to synchronize.
-   Xil_DCacheFlush();
-
 
    return 0;
 }
