@@ -86,7 +86,7 @@ return( ((int)((Temp -(float)((int)Temp)) * (1000.0f))));
 // Project Name:        FMC-IMAGEON HDMI Video Frame Buffer Program
 // Target Devices:      Spartan-6, Virtex-6, Kintex-6
 // Hardware Boards:     FMC-IMAGEON
-// 
+//
 //
 // Tool versions:       Vivado 2013.3
 //
@@ -203,7 +203,7 @@ Xuint8 carrier_hdmi_out_config[CARRIER_HDMI_OUT_CONFIG_LEN][3] =
 };
 
 
-int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 iterations )
+int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 offset )
 {
 	//if (wave <= pDemo->hdmio_height)
 
@@ -217,11 +217,29 @@ int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 it
       {
          for ( col = 0; col < pDemo->hdmio_width; col++ )
          {
-        	 if (row == wave[col] + iterations)
+
+        	 //two side strip for the side info display
+        	 if (col < (pDemo->hdmio_width)/30 || col > 29*(pDemo->hdmio_width)/30)
+        	 {
+        		 pixel = 0x00000000; // Black}
+
+        	 }
+
+        	 //area for wave display
+        	 else{
+        		 if (row == (pDemo->hdmio_height)/4 || (row == 3*(pDemo->hdmio_height)/4))
+        				 pixel = 0x0000FF00; //blue
+        		 else{
+        		 //show grid
+            	 if (row % ((pDemo->hdmio_height)/20) == 0 || (col + (pDemo->hdmio_width)/30) % ((pDemo->hdmio_width )/15) == 0)
+            			 pixel = 0x001F1F1F; // grey
+            	 else{
+            //show wave, the position is added on the iterations parameter for proper display
+        	 if (row == (pDemo->hdmio_height - wave[col] - offset))
         		 pixel = 0x00FFFFFF; // White
         	 else
         		 pixel = 0x00000000; // Black
-
+        	 }}}
 
             *pStorageMem++ = pixel;
          }
@@ -329,69 +347,34 @@ void zed_hdmi_display_init( void *pArg )
 	  //----------------------------------------------------------------------- SysMon Initialize
 
 	  Xuint32 value;
+	  Xuint32 step;
+	  step = 0xffff/(pDemo->hdmio_height/2);
   while (1)
   {
 	  for (counter = 0; counter < 1980; counter++){
 	  	  while ((XSysMon_GetStatus(SysMonInstPtr) & XSM_SR_EOS_MASK) != XSM_SR_EOS_MASK);
 
+	  	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_VPVN); //Read the external Vpn Data
 
-	  	  TempRawData = XSysMon_GetAdcData(SysMonInstPtr, XSM_CH_TEMP);//Read the on-chip Temperature Data
+	  	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
 
-	  	  TempData = XSysMon_RawToTemperature(TempRawData);
-//
-//	  	  printf("\r\nThe Current Temperature is %0d.%03d Centigrades.\r\n",
-//
-//	  	  (int)(TempData), SysMonFractionToInt(TempData));
-
-	  	  value = TempRawData - 41000;
-	  	  value = TempData*10;
+	  	  //value = TempRawData - 41000;
+	  	  //value = ExtVolData*512; //240?
+	  	  value = ExtVolRawData/step;
 	  	  wave[counter] = value;
-
-
-	  //	  VccIntRawData = XSysMon_GetAdcData(SysMonInstPtr, XSM_CH_VCCINT); //Read the on-chip Vccint Data
-	  //
-	  //	  VccIntData = XSysMon_RawToVoltage(VccIntRawData);
-	  //
-	  //	  printf("The Current VCCINT is %0d.%03d Volts. \r\n",
-	  //
-	  //	  (int)(VccIntData), SysMonFractionToInt(VccIntData));
-	  //
-	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_VPVN); //Read the external Vpn Data
-	  //
-	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
-
-
-
-	  //	  printf("The Current VpVn is %0d.%03d Volts. \r\n",
-	  //
-	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
-	  //
-	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_AUX_MIN); //Read the external Vaux0 Data
-	  //
-	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
-	  //
-	  //	  printf("The Current Vaux0 is %0d.%03d Volts. \r\n",
-	  //
-	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
-	  //
-	  //	  ExtVolRawData = XSysMon_GetAdcData(SysMonInstPtr,XSM_CH_AUX_MIN+8);//Read the external Vaux8 Data
-	  //
-	  //	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
-	  //
-	  //	  printf("The Current Vaux8 is %0d.%03d Volts. \r\n",
-	  //
-	  //	  (int)(ExtVolData), SysMonFractionToInt(ExtVolData));
 
 
 	  }
 
 
-   // Display Color Bars
+   // Display wave
 
-   zed_hdmi_display_wave( pDemo, wave, 200 );
+   zed_hdmi_display_wave( pDemo, wave, (pDemo->hdmio_height/4) );
    vfb_tx_start( &(pDemo->vdma_hdmi) );
 
-   xil_printf( "HDMI Output Re-Initialization ...\n\r" );
+   //xil_printf( "HDMI Output Re-Initialization ...\n\r" );
+
+
    {
       Xuint8 num_bytes;
       int i;
