@@ -203,7 +203,7 @@ Xuint8 carrier_hdmi_out_config[CARRIER_HDMI_OUT_CONFIG_LEN][3] =
 };
 
 
-int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 offset )
+int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 frameData[1080][1920], Xuint32 offset )
 {
 	//if (wave <= pDemo->hdmio_height)
 
@@ -218,28 +218,7 @@ int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 of
          for ( col = 0; col < pDemo->hdmio_width; col++ )
          {
 
-        	 //two side strip for the side info display
-        	 if (col < (pDemo->hdmio_width)/30 || col > 29*(pDemo->hdmio_width)/30)
-        	 {
-        		 pixel = 0x00000000; // Black}
-
-        	 }
-
-        	 //area for wave display
-        	 else{
-        		 if (row == (pDemo->hdmio_height)/4 || (row == 3*(pDemo->hdmio_height)/4))
-        				 pixel = 0x0000FF00; //blue
-        		 else{
-        		 //show grid
-            	 if (row % ((pDemo->hdmio_height)/20) == 0 || (col + (pDemo->hdmio_width)/30) % ((pDemo->hdmio_width )/15) == 0)
-            			 pixel = 0x001F1F1F; // grey
-            	 else{
-            //show wave, the position is added on the iterations parameter for proper display
-        	 if (row == (pDemo->hdmio_height - wave[col] - offset))
-        		 pixel = 0x00FFFFFF; // White
-        	 else
-        		 pixel = 0x00000000; // Black
-        	 }}}
+        	 	pixel = frameData[row][col];
 
             *pStorageMem++ = pixel;
          }
@@ -254,14 +233,14 @@ int zed_hdmi_display_wave( zed_hdmi_display_t *pDemo, Xuint32 wave[], Xuint32 of
 }
 
 Xuint32 wave[1920];
+Xuint32 frame[1080][1920];
 
 //int zed_hdmi_display_init( zed_hdmi_display_t *pDemo )
 void zed_hdmi_display_init( void *pArg )
 {
 	zed_hdmi_display_t *pDemo = (zed_hdmi_display_t *)  pArg;
    int ret;
-   Xuint32 timeout = 100;
-   Xuint32 iterations = 0;
+
 
    xil_printf("\n\r");
    xil_printf("------------------------------------------------------\n\r");
@@ -359,17 +338,52 @@ void zed_hdmi_display_init( void *pArg )
 	  	  ExtVolData = XSysMon_RawToExtVoltage(ExtVolRawData);
 
 	  	  //value = TempRawData - 41000;
-	  	  //value = ExtVolData*512; //240?
-	  	  value = ExtVolRawData/step;
+	  	  value = ExtVolData*(pDemo->hdmio_height/2);
+	  	 // value = ExtVolRawData/step;
 	  	  wave[counter] = value;
 
 
 	  }
 
 
+	  int row, col;
+	  Xuint32 pixel;
+	  //calculate frame
+      for ( row = 0; row < pDemo->hdmio_height; row++ )
+      {
+         for ( col = 0; col < pDemo->hdmio_width; col++ )
+         {
+
+        	 //two side strip for the side info display
+        	 if (col < (pDemo->hdmio_width)/30 || col > 29*(pDemo->hdmio_width)/30)
+        	 {
+        		 pixel = 0x00000000; // Black}
+
+        	 }
+
+        	 //area for wave display
+        	 else{
+        		 if (row == (pDemo->hdmio_height)/4 || (row == 3*(pDemo->hdmio_height)/4))
+        				 pixel = 0x0000FF00; //blue
+        		 else{
+        		 //show grid
+            	 if (row % ((pDemo->hdmio_height)/20) == 0 || (col + (pDemo->hdmio_width)/30) % ((pDemo->hdmio_width )/15) == 0)
+            			 pixel = 0x001F1F1F; // grey
+            	 else{
+            //show wave, the position is added on the iterations parameter for proper display
+        	 if (row == (pDemo->hdmio_height - wave[col]) - (pDemo->hdmio_height)/4)
+        		 pixel = 0x00FFFFFF; // White
+        	 else
+        		 pixel = 0x00000000; // Black
+        	 }}}
+
+            frame[row][col] = pixel;
+         }
+      }
+
    // Display wave
 
-   zed_hdmi_display_wave( pDemo, wave, (pDemo->hdmio_height/4) );
+   zed_hdmi_display_wave( pDemo, frame, (pDemo->hdmio_height/4) );
    vfb_tx_start( &(pDemo->vdma_hdmi) );
 
    //xil_printf( "HDMI Output Re-Initialization ...\n\r" );
